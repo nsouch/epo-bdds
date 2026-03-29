@@ -89,40 +89,20 @@ echo "==> logs (debug, text)"
   -log-format text \
   -log-file "$OUT_DIR/stderr_tmp" \
   latest-delivery -id "$PRODUCT_ID" > /dev/null
-head -5 "$OUT_DIR/stderr_tmp" > "$OUT_DIR/logs_sample.txt"
+head -20 "$OUT_DIR/stderr_tmp" > "$OUT_DIR/logs_sample.txt"
 echo "    OK -> $OUT_DIR/logs_sample.txt"
 
-exit 0
+# --- download-file (premier fichier de la dernière livraison) ---
+DELIVERY_ID=$(jq '.deliveries[0].delivery_id' "$OUT_DIR/latest_delivery.json")
+FILE_ID=$(jq '.deliveries[0].files[0].file_id' "$OUT_DIR/latest_delivery.json")
+FILE_NAME=$(jq -r '.deliveries[0].files[0].file_name' "$OUT_DIR/latest_delivery.json")
+echo "    Latest delivery: delivery_id=$DELIVERY_ID file_id=$FILE_ID name=\"$FILE_NAME\""
 
-FILE_ID=$(jq '.files[0].file_id' "$OUT_DIR/latest_delivery.json")
-FILE_NAME=$(jq -r '.files[0].file_name' "$OUT_DIR/latest_delivery.json")
-DELIVERY_ID=$(jq '.delivery_id' "$OUT_DIR/latest_delivery.json")
-echo "    First file: id=$FILE_ID name=\"$FILE_NAME\""
-
-# --- download-file (premier fichier de la première livraison) ---
-DOWNLOAD_OUTPUT="/tmp/$FILE_NAME"
+DOWNLOAD_OUTPUT="$OUT_DIR/$FILE_NAME"
 run_cmd "download-file (product=$PRODUCT_ID delivery=$DELIVERY_ID file=$FILE_ID)" "download_file.json" \
   download-file \
     -product "$PRODUCT_ID" \
     -delivery "$DELIVERY_ID" \
     -file "$FILE_ID" \
     -output "$DOWNLOAD_OUTPUT"
-
-# Replace the local path with a generic path in the JSON output
-jq --arg name "$FILE_NAME" '.output = "/data/\($name)"' \
-  "$OUT_DIR/download_file.json" > "$OUT_DIR/download_file_sanitized.json"
-
-# --- Summary ---
-echo ""
-echo "========================================="
-echo "Capture complete. Generated files:"
-ls -lh "$OUT_DIR"/*.json
-echo ""
-echo "Output per command:"
-for f in list_products get_product find_product latest_delivery download_file_sanitized; do
-  echo ""
-  echo "--- $f ---"
-  cat "$OUT_DIR/${f}.json"
-done
-echo ""
-echo "Paste the block above into the chat to update the README."
+echo "    Downloaded file saved to $DOWNLOAD_OUTPUT"
