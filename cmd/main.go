@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	bdds "github.com/patent-dev/epo-bdds"
@@ -66,6 +69,7 @@ type downloadResponse struct {
 	Output     string `json:"output"`
 	SizeBytes  int64  `json:"size_bytes"`
 	DurationMs int64  `json:"duration_ms"`
+	Checksum   string `json:"checksum"`
 }
 
 // --- Converters ---
@@ -405,6 +409,7 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 	deliveryID := fs.Int("delivery", 0, "Delivery ID (required)")
 	fileID := fs.Int("file", 0, "File ID (required)")
 	output := fs.String("output", "", "Output file path (required)")
+	expectedChecksum := fs.String("checksum", "", "Expected SHA1 checksum for verification (optional)")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
@@ -441,12 +446,21 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		"file", *fileID,
 		"output", *output,
 	)
+	hasher := sha1.New()
 	start := time.Now()
+	var lastPct int64
 	err = client.DownloadFileWithProgress(
 		context.Background(),
-		*productID, *deliveryID, *fileID, f,
+		*productID, *deliveryID, *fileID, io.MultiWriter(f, hasher),
 		func(written, total int64) {
-			logger.Debug("download progress", "written", written, "total", total)
+			if total <= 0 {
+				return
+			}
+			pct := written * 10 / total * 10 // nearest lower 10%
+			if pct > lastPct {
+				lastPct = pct
+				logger.Debug("download progress", "percent", pct, "written", written, "total", total)
+			}
 		},
 	)
 	if err != nil {
@@ -455,15 +469,62 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		return writeError(stderr, errorCode(err), err.Error())
 	}
 
+	streamChecksum := strings.ToUpper(hex.EncodeToString(hasher.Sum(nil)))
+	expected := strings.ToUpper(*expectedChecksum)
+
+	if expected != "" && !strings.EqualFold(streamChecksum, expected) {
+		_ = os.Remove(*output)
+		logger.Error("stream checksum mismatch",
+			"expected", expected,
+			"stream_checksum", streamChecksum,
+		)
+		return writeError(stderr, "checksum_mismatch",
+			fmt.Sprintf("stream checksum mismatch: expected %s, got %s", expected, streamChecksum))
+	}
+
+	// Flush to disk, then re-hash from disk to detect write corruption.
+	if err := f.Sync(); err != nil {
+		_ = os.Remove(*output)
+		return writeError(stderr, "error", fmt.Sprintf("cannot sync output file: %v", err))
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		_ = os.Remove(*output)
+		return writeError(stderr, "error", fmt.Sprintf("cannot seek output file: %v", err))
+	}
+	diskHasher := sha1.New()
+	if _, err := io.Copy(diskHasher, f); err != nil {
+		_ = os.Remove(*output)
+		return writeError(stderr, "error", fmt.Sprintf("cannot hash output file: %v", err))
+	}
+
+	diskChecksum := strings.ToUpper(hex.EncodeToString(diskHasher.Sum(nil)))
+
+	if diskChecksum != streamChecksum {
+		_ = os.Remove(*output)
+		logger.Error("disk write corruption detected",
+			"stream_checksum", streamChecksum,
+			"disk_checksum", diskChecksum,
+		)
+		return writeError(stderr, "download_corrupted",
+			fmt.Sprintf("disk checksum %s differs from stream checksum %s", diskChecksum, streamChecksum))
+	}
+
+	computedChecksum := diskChecksum
+	logger.Debug("expected checksum", "expected", expected)
+	logger.Debug("stream checksum", "stream_checksum", streamChecksum)
+	logger.Debug("disk checksum", "disk_checksum", diskChecksum)
+
 	var sizeBytes int64
 	if fi, statErr := f.Stat(); statErr == nil {
 		sizeBytes = fi.Size()
 	}
 	duration := time.Since(start)
+
 	logger.Info("download complete",
 		"output", *output,
 		"size_bytes", sizeBytes,
 		"duration_ms", duration.Milliseconds(),
+		"checksum", computedChecksum,
 	)
 	return writeJSON(stdout, downloadResponse{
 		ProductID:  *productID,
@@ -472,5 +533,6 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		Output:     *output,
 		SizeBytes:  sizeBytes,
 		DurationMs: duration.Milliseconds(),
+		Checksum:   computedChecksum,
 	})
 }
