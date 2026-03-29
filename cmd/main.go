@@ -60,6 +60,9 @@ type findProductResponse struct {
 }
 
 type downloadResponse struct {
+	ProductID  int    `json:"product_id"`
+	DeliveryID int    `json:"delivery_id"`
+	FileID     int    `json:"file_id"`
 	Output     string `json:"output"`
 	SizeBytes  int64  `json:"size_bytes"`
 	DurationMs int64  `json:"duration_ms"`
@@ -463,6 +466,9 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		"duration_ms", duration.Milliseconds(),
 	)
 	return writeJSON(stdout, downloadResponse{
+		ProductID:  *productID,
+		DeliveryID: *deliveryID,
+		FileID:     *fileID,
 		Output:     *output,
 		SizeBytes:  sizeBytes,
 		DurationMs: duration.Milliseconds(),
