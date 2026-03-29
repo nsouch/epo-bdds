@@ -41,6 +41,7 @@ func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	t.logger.Debug("api request",
 		"method", req.Method,
 		"url", req.URL.String(),
+		"content_length", req.ContentLength,
 	)
 	resp, err := t.rt.RoundTrip(req)
 	if err != nil {
