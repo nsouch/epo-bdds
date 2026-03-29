@@ -229,6 +229,50 @@ On error, the program writes to stderr with a non-zero exit code:
 | `download_corrupted` | Disk checksum differs from stream checksum (write corruption) |
 | `error` | Any other error |
 
+### Examples
+
+**File not found** — downloading with an unknown file ID (the request is retried 3 times before failing):
+
+```bash
+$ ./epo-bdds-cli -log-level debug download-file -product 5 -delivery 3134 -file 9999 -output /data/out.zip
+time=2026-03-29T11:22:46.224+02:00 level=DEBUG msg="api response" ... status=404 duration_ms=2328
+time=2026-03-29T11:22:46.224+02:00 level=WARN msg="retrying request" attempt=1 max_retries=3 error="file not found: 5/3134/9999"
+time=2026-03-29T11:22:47.319+02:00 level=WARN msg="retrying request" attempt=2 max_retries=3 error="file not found: 5/3134/9999"
+time=2026-03-29T11:22:49.420+02:00 level=WARN msg="retrying request" attempt=3 max_retries=3 error="file not found: 5/3134/9999"
+time=2026-03-29T11:22:52.523+02:00 level=ERROR msg="download failed" error="failed after 3 retries: file not found: 5/3134/9999"
+{"code":"error","error":"failed after 3 retries: file not found: 5/3134/9999"}
+```
+
+**Access denied** — requesting a paid product without credentials (HTTP 401 after retries):
+
+```bash
+$ ./epo-bdds-cli -log-level debug get-product -id 9999
+time=2026-03-29T11:24:41.430+02:00 level=DEBUG msg="api response" ... status=401 duration_ms=250
+time=2026-03-29T11:24:41.430+02:00 level=WARN msg="retrying request" attempt=1 max_retries=3 error="unexpected status 401: {\"code\":9000,\"message\":\"Access Denied\",...}"
+time=2026-03-29T11:24:42.539+02:00 level=WARN msg="retrying request" attempt=2 max_retries=3 error="unexpected status 401: ..."
+time=2026-03-29T11:24:44.664+02:00 level=WARN msg="retrying request" attempt=3 max_retries=3 error="unexpected status 401: ..."
+time=2026-03-29T11:24:47.779+02:00 level=ERROR msg="get product failed" id=9999 error="failed after 3 retries: unexpected status 401: ..."
+{"code":"error","error":"failed after 3 retries: unexpected status 401: {\"code\":9000,\"message\":\"Access Denied\",\"description\":\"\",\"timestamp\":\"2026-03-29T11:24:47.823+02:00\"}"}
+```
+
+**Missing required flag** — validation error before any API call is made (plain text on stderr, exit code 1):
+
+```bash
+$ ./epo-bdds-cli download-file -product 5 -delivery 3134
+error: -file flag is required
+Usage of download-file:
+  -checksum string
+        Expected SHA1 checksum for verification (optional)
+  -delivery int
+        Delivery ID (required)
+  -file int
+        File ID (required)
+  -output string
+        Output file path (required)
+  -product int
+        Product ID (required)
+```
+
 ---
 
 ## Logging
