@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -26,17 +27,49 @@ type Client struct {
 	token           string
 	tokenExpiry     time.Time
 	generatedClient *generated.ClientWithResponses
+	logger          *slog.Logger // never nil; no-op logger when none configured
+}
+
+// loggingTransport wraps an http.RoundTripper and logs each request/response.
+type loggingTransport struct {
+	logger *slog.Logger
+	rt     http.RoundTripper
+}
+
+func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+	t.logger.Debug("api request",
+		"method", req.Method,
+		"url", req.URL.String(),
+	)
+	resp, err := t.rt.RoundTrip(req)
+	if err != nil {
+		t.logger.Error("api request failed",
+			"method", req.Method,
+			"url", req.URL.String(),
+			"error", err,
+		)
+		return nil, err
+	}
+	t.logger.Debug("api response",
+		"method", req.Method,
+		"url", req.URL.String(),
+		"status", resp.StatusCode,
+		"duration_ms", time.Since(start).Milliseconds(),
+	)
+	return resp, nil
 }
 
 // Config holds client configuration
 type Config struct {
-	Username   string // EPO BDDS username
-	Password   string // EPO BDDS password
-	BaseURL    string // Base URL for API (default: https://publication-bdds.apps.epo.org)
-	UserAgent  string // Optional custom user agent
-	MaxRetries int    // Maximum number of retries (default: 3)
-	RetryDelay int    // Seconds between retries (default: 1)
-	Timeout    int    // Request timeout in seconds (default: 30)
+	Username   string       // EPO BDDS username
+	Password   string       // EPO BDDS password
+	BaseURL    string       // Base URL for API (default: https://publication-bdds.apps.epo.org)
+	UserAgent  string       // Optional custom user agent
+	MaxRetries int          // Maximum number of retries (default: 3)
+	RetryDelay int          // Seconds between retries (default: 1)
+	Timeout    int          // Request timeout in seconds (default: 30)
+	Logger     *slog.Logger // Optional structured logger; nil disables logging
 }
 
 // DefaultConfig returns default configuration
@@ -75,13 +108,26 @@ func NewClient(config *Config) (*Client, error) {
 		config.Timeout = DefaultConfig().Timeout
 	}
 
+	// Resolve logger: use provided one or a discard no-op.
+	logger := config.Logger
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+
 	httpClient := &http.Client{
 		Timeout: time.Duration(config.Timeout) * time.Second,
+	}
+	if config.Logger != nil {
+		httpClient.Transport = &loggingTransport{
+			logger: config.Logger,
+			rt:     http.DefaultTransport,
+		}
 	}
 
 	client := &Client{
 		config:     config,
 		httpClient: httpClient,
+		logger:     logger,
 	}
 
 	// Create generated client with request editor that adds auth
@@ -122,9 +168,11 @@ func (c *Client) ensureValidToken(ctx context.Context) error {
 
 	// Check if token exists and is still valid
 	if c.token != "" && time.Now().Add(tokenRefreshBuffer).Before(c.tokenExpiry) {
+		c.logger.Debug("using cached token", "expiry", c.tokenExpiry)
 		return nil
 	}
 
+	c.logger.Debug("token refresh needed")
 	// Need to authenticate or refresh
 	return c.authenticate(ctx)
 }
@@ -135,6 +183,7 @@ func (c *Client) authenticate(ctx context.Context) error {
 		oauthURL = "https://login.epo.org/oauth2/aus3up3nz0N133c0V417/v1/token"
 		clientID = "MG9hM3VwZG43YW41cE1JOE80MTc="
 	)
+	c.logger.Info("authenticating", "username", c.config.Username)
 
 	data := url.Values{
 		"grant_type": {"password"},
@@ -172,6 +221,7 @@ func (c *Client) authenticate(ctx context.Context) error {
 
 	c.token = tokenResp.AccessToken
 	c.tokenExpiry = time.Now().Add(tokenTTL)
+	c.logger.Info("token obtained", "expiry", c.tokenExpiry)
 
 	return nil
 }
@@ -188,12 +238,18 @@ func (c *Client) retryableRequest(ctx context.Context, fn func() error) error {
 
 		// Check if it's a 401 - try re-authenticating
 		if authErr, ok := err.(*AuthError); ok && authErr.StatusCode == 401 && attempt < c.config.MaxRetries {
+			c.logger.Info("re-authenticating after 401")
 			// Force re-auth by clearing token
 			c.token = ""
 			c.tokenExpiry = time.Time{}
 		}
 
 		if attempt < c.config.MaxRetries {
+			c.logger.Warn("retrying request",
+				"attempt", attempt+1,
+				"max_retries", c.config.MaxRetries,
+				"error", err,
+			)
 			time.Sleep(time.Duration(c.config.RetryDelay*(attempt+1)) * time.Second)
 		}
 	}
@@ -375,4 +431,3 @@ func (c *Client) GetLatestDelivery(ctx context.Context, productID int) (*Deliver
 
 	return latest, nil
 }
-

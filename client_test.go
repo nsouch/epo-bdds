@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -406,5 +407,51 @@ func TestProgressReader(t *testing.T) {
 
 	if lastTotal != int64(len(data)) {
 		t.Errorf("Expected final total %d, got %d", len(data), lastTotal)
+	}
+}
+
+// TestLoggingTransport verifies that loggingTransport logs request and response details.
+func TestLoggingTransport(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[]`))
+	}))
+	defer apiServer.Close()
+
+	config := &Config{
+		BaseURL: apiServer.URL,
+		Logger:  logger,
+		Timeout: 5,
+	}
+	client, err := NewClient(config)
+	if err != nil {
+		t.Fatalf("NewClient failed: %v", err)
+	}
+
+	_, _ = client.ListProducts(context.Background())
+
+	logs := logBuf.String()
+	if !strings.Contains(logs, `"msg":"api request"`) {
+		t.Errorf("expected api request log entry, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, `"msg":"api response"`) {
+		t.Errorf("expected api response log entry, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, `"status":200`) {
+		t.Errorf("expected status 200 in response log, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, `"duration_ms"`) {
+		t.Errorf("expected duration_ms in response log, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, `"method":"GET"`) {
+		t.Errorf("expected method GET in request log, got:\n%s", logs)
+	}
+	// Password must never appear in logs
+	if strings.Contains(logs, "password") || strings.Contains(logs, "Password") {
+		t.Errorf("password must not appear in logs, got:\n%s", logs)
 	}
 }

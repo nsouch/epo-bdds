@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# capture_outputs.sh
+# Runs each epo-bdds-cli command and saves the outputs to JSON files.
+# Usage: EPO_BDDS_USERNAME=xxx EPO_BDDS_PASSWORD=yyy bash capture_outputs.sh
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT_DIR="$SCRIPT_DIR/downloads"
+
+# --- Load .env file ---
+# Looks for cmd/.env first, then the parent directory (repository root)
+for env_file in "$SCRIPT_DIR/../.env"; do
+  if [[ -f "$env_file" ]]; then
+    echo "==> Loading credentials from $env_file"
+    # Skip blank lines and comments; only export KEY=VALUE entries
+    set -o allexport
+    # shellcheck source=/dev/null
+    source "$env_file"
+    set +o allexport
+    break
+  fi
+done
+
+# Check that credentials are set (either from .env or the environment)
+if [[ -z "${EPO_BDDS_USERNAME:-}" || -z "${EPO_BDDS_PASSWORD:-}" ]]; then
+  echo "ERROR: EPO_BDDS_USERNAME and EPO_BDDS_PASSWORD are required." >&2
+  echo "  Option 1: create .env in the repository root with:" >&2
+  echo "    EPO_BDDS_USERNAME=your.account@example.com" >&2
+  echo "    EPO_BDDS_PASSWORD=yourpassword" >&2
+  echo "  Option 2: pass them as a command prefix:" >&2
+  echo "    EPO_BDDS_USERNAME=xxx EPO_BDDS_PASSWORD=yyy bash capture_outputs.sh" >&2
+  exit 1
+fi
+
+mkdir -p "$OUT_DIR"
+echo "==> Output will be saved to $OUT_DIR"
+
+# --- Build ---
+echo "==> Building epo-bdds-cli..."
+cd "$SCRIPT_DIR"
+go build -o epo-bdds-cli .
+echo "    OK"
+
+mkdir -p "$OUT_DIR"
+
+# --- Helpers ---
+
+run_cmd() {
+  local label="$1"
+  local out_file="$OUT_DIR/$2"
+  shift 2
+  echo "==> $label"
+  echo "    cmd: epo-bdds-cli $*"
+  if ./epo-bdds-cli "$@" > "$out_file" 2>"$OUT_DIR/stderr_tmp"; then
+    echo "    OK -> $out_file"
+  else
+    echo "    ERROR (exit code $?):"
+    cat "$OUT_DIR/stderr_tmp" >&2
+    return 1
+  fi
+}
+
+# --- list-products ---
+run_cmd "list-products" "list_products.json" \
+  list-products
+
+# Pick the first available product for subsequent commands
+PRODUCT_ID=$(jq '.[0].product_id' "$OUT_DIR/list_products.json")
+PRODUCT_NAME=$(jq -r '.[0].name' "$OUT_DIR/list_products.json")
+echo "    First product: id=$PRODUCT_ID name=\"$PRODUCT_NAME\""
+
+# --- get-product ---
+run_cmd "get-product (id=$PRODUCT_ID)" "get_product.json" \
+  get-product -id "$PRODUCT_ID"
+
+# --- find-product ---
+run_cmd "find-product (name=\"$PRODUCT_NAME\")" "find_product.json" \
+  find-product -name "$PRODUCT_NAME"
+
+# --- latest-delivery ---
+run_cmd "latest-delivery (product=$PRODUCT_ID)" "latest_delivery.json" \
+  latest-delivery -id "$PRODUCT_ID"
+
+# --- logs (debug level, text format) ---
+echo "==> logs (debug, text)"
+./epo-bdds-cli \
+  -log-level debug \
+  -log-format text \
+  -log-file "$OUT_DIR/stderr_tmp" \
+  latest-delivery -id "$PRODUCT_ID" > /dev/null
+head -5 "$OUT_DIR/stderr_tmp" > "$OUT_DIR/logs_sample.txt"
+echo "    OK -> $OUT_DIR/logs_sample.txt"
+
+exit 0
+
+FILE_ID=$(jq '.files[0].file_id' "$OUT_DIR/latest_delivery.json")
+FILE_NAME=$(jq -r '.files[0].file_name' "$OUT_DIR/latest_delivery.json")
+DELIVERY_ID=$(jq '.delivery_id' "$OUT_DIR/latest_delivery.json")
+echo "    First file: id=$FILE_ID name=\"$FILE_NAME\""
+
+# --- download-file (premier fichier de la première livraison) ---
+DOWNLOAD_OUTPUT="/tmp/$FILE_NAME"
+run_cmd "download-file (product=$PRODUCT_ID delivery=$DELIVERY_ID file=$FILE_ID)" "download_file.json" \
+  download-file \
+    -product "$PRODUCT_ID" \
+    -delivery "$DELIVERY_ID" \
+    -file "$FILE_ID" \
+    -output "$DOWNLOAD_OUTPUT"
+
+# Replace the local path with a generic path in the JSON output
+jq --arg name "$FILE_NAME" '.output = "/data/\($name)"' \
+  "$OUT_DIR/download_file.json" > "$OUT_DIR/download_file_sanitized.json"
+
+# --- Summary ---
+echo ""
+echo "========================================="
+echo "Capture complete. Generated files:"
+ls -lh "$OUT_DIR"/*.json
+echo ""
+echo "Output per command:"
+for f in list_products get_product find_product latest_delivery download_file_sanitized; do
+  echo ""
+  echo "--- $f ---"
+  cat "$OUT_DIR/${f}.json"
+done
+echo ""
+echo "Paste the block above into the chat to update the README."
