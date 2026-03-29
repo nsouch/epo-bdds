@@ -1,6 +1,6 @@
 # epo-bdds-cli
 
-Interface en ligne de commande pour l'API EPO BDDS. Retourne du JSON sur stdout, les erreurs sur stderr.
+Command-line interface for the EPO BDDS API. Returns JSON on stdout, errors on stderr.
 
 ## Installation
 
@@ -9,86 +9,161 @@ cd cmd
 go build -o epo-bdds-cli .
 ```
 
-## Authentification
+## Authentication
 
-Les credentials sont lus depuis les variables d'environnement :
+Credentials are read from environment variables:
 
 ```bash
-export EPO_BDDS_USERNAME="mon.compte@example.com"
-export EPO_BDDS_PASSWORD="monmotdepasse"
+export EPO_BDDS_USERNAME="my.account@example.com"
+export EPO_BDDS_PASSWORD="mypassword"
 ```
 
-Les produits gratuits sont accessibles sans credentials.
+Free products are accessible without credentials.
 
 ## Synopsis
 
 ```
-epo-bdds-cli [global flags] <commande> [flags de la commande]
+epo-bdds-cli [global flags] <command> [command flags]
 ```
 
-### Flags globaux
+### Global flags
 
-| Flag | Valeurs | Défaut | Description |
-|------|---------|--------|-------------|
-| `-log-level` | `debug`, `info`, `warn`, `error` | `error` | Niveau de verbosité des logs |
-| `-log-format` | `json`, `text` | `text` | Format des logs |
-| `-log-file` | chemin | stderr | Fichier de sortie des logs |
+| Flag | Values | Default | Description |
+|------|--------|---------|-------------|
+| `-log-level` | `debug`, `info`, `warn`, `error` | `error` | Log verbosity level |
+| `-log-format` | `json`, `text` | `text` | Log format |
+| `-log-file` | path | stderr | Log output file |
 
 ---
 
-## Commandes
+## Commands
 
-### `list-products` — Lister les produits
+### `list-products` — List products
 
 ```bash
 epo-bdds-cli list-products
 ```
 
-Sortie :
+Output:
 
 ```json
 [
   {
-    "id": 1,
-    "name": "EP Full Text Data",
-    "description": "Full text of EP patent applications"
+    "product_id": 5,
+    "name": "14.11 EPO worldwide legal event data (INPADOC) - front file",
+    "description": "The product 14.11 contains legal event data and includes records from over 60 international patent authorities. INPADOC back file is available annually ."
   },
   {
-    "id": 2,
-    "name": "EP Citations",
-    "description": "Citation data for EP publications"
+    "product_id": 3,
+    "name": "14.7  EPO worldwide bibliographic data (DOCDB) - front file",
+    "description": "DOCDB - EPO worldwide bibliographic data is an extraction in XML format of our master documentation database with worldwide coverage containing bibliographic data, abstracts and citations (but no full text). This is a front file, back file data is available under the DOCDB back file folder."
+  },
+  {
+    "product_id": 32,
+    "name": "14.12 EP full-text data",
+    "description": "EP full-text data contains all EP-A and EP-B publications published by EPO from the 1970s to date. Newly published ZIP files with PDF/A and XML will be accessible every Wednesday at 14:00 CET/CEST."
   }
 ]
 ```
 
+_(12 products total in the actual response)_
+
 ---
 
-### `get-product` — Détails d'un produit avec ses livraisons
+### `get-product` — Product details with its deliveries
 
 ```bash
-epo-bdds-cli get-product -id 1
+epo-bdds-cli get-product -id 5
 ```
 
-Sortie :
+Output:
 
 ```json
 {
-  "product_id": 1,
-  "name": "EP Full Text Data",
-  "description": "Full text of EP patent applications",
+  "product_id": 5,
+  "name": "14.11 EPO worldwide legal event data (INPADOC) - front file",
+  "description": "The product 14.11 contains legal event data and includes records from over 60 international patent authorities. INPADOC back file is available annually .",
   "deliveries": [
     {
-      "delivery_id": 42,
-      "delivery_name": "2024-10-15",
-      "delivery_publication_datetime": "2024-10-15T10:00:00Z",
-      "delivery_expiry_datetime": "2025-10-15T10:00:00Z",
+      "delivery_id": 3134,
+      "delivery_name": "14.11 INPADOC - EPO worldwide legal event data 2026/013",
+      "delivery_publication_datetime": "2026-03-24T09:00:00+01:00",
       "files": [
         {
-          "file_id": 100,
-          "file_name": "ep_fulltext_2024-10-15.zip",
-          "file_size": "4.2 GB",
-          "file_checksum": "sha256:a1b2c3...",
-          "file_publication_datetime": "2024-10-15T10:00:00Z"
+          "file_id": 9195,
+          "file_name": "legstat_xml_202613.zip",
+          "file_size": "318.5 MB",
+          "file_checksum": "8AB0B4AD3D3623DF3797D63DA6770EE9CB849E04",
+          "file_publication_datetime": "2026-03-24T09:00:00+01:00"
+        },
+        {
+          "file_id": 9196,
+          "file_name": "statistics_authority_code_202613.xlsx",
+          "file_size": "450.1 kB",
+          "file_checksum": "B4AEF885E8665A491EA0C878CEE86B4B82007C76",
+          "file_publication_datetime": "2026-03-24T09:00:00+01:00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+_(The `delivery_expiry_datetime` field is omitted when absent. Product 5 has 66 deliveries in the actual response.)_
+
+---
+
+### `find-product` — Search for a product by name
+
+```bash
+epo-bdds-cli find-product -name "14.11 EPO worldwide legal event data (INPADOC) - front file"
+```
+
+Output:
+
+```json
+{
+  "product_id": 5,
+  "name": "14.11 EPO worldwide legal event data (INPADOC) - front file",
+  "description": "The product 14.11 contains legal event data and includes records from over 60 international patent authorities. INPADOC back file is available annually ."
+}
+```
+
+---
+
+### `latest-delivery` — Latest delivery for a product
+
+```bash
+epo-bdds-cli latest-delivery -id 5
+```
+
+Output:
+
+```json
+{
+  "product_id": 5,
+  "name": "14.11 EPO worldwide legal event data (INPADOC) - front file",
+  "description": "The product 14.11 contains legal event data and includes records from over 60 international patent authorities. INPADOC back file is available annually .",
+  "deliveries": [
+    {
+      "delivery_id": 3134,
+      "delivery_name": "14.11 INPADOC - EPO worldwide legal event data 2026/013",
+      "delivery_publication_datetime": "2026-03-24T09:00:00+01:00",
+      "files": [
+        {
+          "file_id": 9195,
+          "file_name": "legstat_xml_202613.zip",
+          "file_size": "318.5 MB",
+          "file_checksum": "8AB0B4AD3D3623DF3797D63DA6770EE9CB849E04",
+          "file_publication_datetime": "2026-03-24T09:00:00+01:00"
+        },
+        ...
+        {
+          "file_id": 9198,
+          "file_name": "INPADOC_coverage_202613.xlsx",
+          "file_size": "870.8 kB",
+          "file_checksum": "F18723C6425425E2D25377DF57A75D7D61B104A8",
+          "file_publication_datetime": "2026-03-24T09:00:00+01:00"
         }
       ]
     }
@@ -98,132 +173,106 @@ Sortie :
 
 ---
 
-### `find-product` — Rechercher un produit par nom
-
-```bash
-epo-bdds-cli find-product -name "EP Full Text Data"
-```
-
-Sortie :
-
-```json
-{
-  "product_id": 1,
-  "name": "EP Full Text Data",
-  "description": "Full text of EP patent applications"
-}
-```
-
----
-
-### `latest-delivery` — Dernière livraison d'un produit
-
-```bash
-epo-bdds-cli latest-delivery -id 1
-```
-
-Sortie :
-
-```json
-{
-  "delivery_id": 42,
-  "delivery_name": "2024-10-15",
-  "delivery_publication_datetime": "2024-10-15T10:00:00Z",
-  "delivery_expiry_datetime": "2025-10-15T10:00:00Z",
-  "files": [
-    {
-      "file_id": 100,
-      "file_name": "ep_fulltext_2024-10-15.zip",
-      "file_size": "4.2 GB",
-      "file_checksum": "sha256:a1b2c3...",
-      "file_publication_datetime": "2024-10-15T10:00:00Z"
-    }
-  ]
-}
-```
-
----
-
-### `download-file` — Télécharger un fichier
+### `download-file` — Download a file
 
 ```bash
 epo-bdds-cli download-file \
-  -product 1 \
-  -delivery 42 \
-  -file 100 \
-  -output /data/ep_fulltext_2024-10-15.zip
+  -product 5 \
+  -delivery 3134 \
+  -file 9195 \
+  -output /data/legstat_xml_202613.zip
 ```
 
-Sortie :
+Optional flag `-checksum <SHA1>`: if provided, the stream checksum is verified before writing to disk.
+
+```bash
+epo-bdds-cli download-file \
+  -product 5 \
+  -delivery 3134 \
+  -file 9195 \
+  -output /data/legstat_xml_202613.zip \
+  -checksum 8AB0B4AD3D3623DF3797D63DA6770EE9CB849E04
+```
+
+Output:
 
 ```json
 {
-  "output": "/data/ep_fulltext_2024-10-15.zip",
-  "size_bytes": 4509715456,
-  "duration_ms": 34821
+  "product_id": 5,
+  "delivery_id": 3134,
+  "file_id": 9195,
+  "output": "/data/legstat_xml_202613.zip",
+  "size_bytes": 318466085,
+  "duration_ms": 8681,
+  "checksum": "8AB0B4AD3D3623DF3797D63DA6770EE9CB849E04"
 }
 ```
 
+The download computes a SHA1 checksum on the fly (stream) and re-verifies it from disk to detect any write corruption.
+
 ---
 
-## Codes d'erreur
+## Error codes
 
-En cas d'erreur, le programme écrit sur stderr avec un code de sortie non nul :
+On error, the program writes to stderr with a non-zero exit code:
 
 ```json
-{"error": "message descriptif", "code": "not_found"}
+{"error": "descriptive message", "code": "not_found"}
 ```
 
-| Code | Signification |
-|------|---------------|
-| `auth_error` | Credentials invalides ou token expiré (HTTP 401/403) |
-| `not_found` | Ressource introuvable (HTTP 404) |
-| `rate_limited` | Quota dépassé, réessayer plus tard |
-| `error` | Toute autre erreur |
+| Code | Meaning |
+|------|---------|
+| `auth_error` | Invalid credentials or expired token (HTTP 401/403) |
+| `not_found` | Resource not found (HTTP 404) |
+| `rate_limited` | Quota exceeded, retry later |
+| `checksum_mismatch` | Stream checksum does not match the provided `-checksum` |
+| `download_corrupted` | Disk checksum differs from stream checksum (write corruption) |
+| `error` | Any other error |
 
 ---
 
 ## Logging
 
-Par défaut les logs sont supprimés (niveau `error`, sortie stderr). Pour diagnostiquer les appels API :
+By default logs are suppressed (level `error`, output stderr). To diagnose API calls:
 
 ```bash
-# Logs détaillés en texte sur stderr
+# Detailed text logs on stderr
 epo-bdds-cli -log-level debug list-products
 
-# Logs JSON dans un fichier
+# JSON logs to a file
 epo-bdds-cli -log-level info -log-format json -log-file api.log list-products
 
-# Logs debug sur stderr + résultat dans un fichier
+# Debug logs on stderr + result to a file
 epo-bdds-cli -log-level debug list-products > products.json
 ```
 
-Exemple de log JSON (une ligne par événement) :
+Example JSON log (one line per event):
 
 ```json
-{"time":"2024-10-15T10:00:01Z","level":"INFO","msg":"authenticating","username":"mon.compte@example.com"}
-{"time":"2024-10-15T10:00:01Z","level":"INFO","msg":"token obtained","expiry":"2024-10-15T11:00:01Z"}
-{"time":"2024-10-15T10:00:01Z","level":"DEBUG","msg":"api request","method":"GET","url":"https://bdds.epo.org/api/products"}
-{"time":"2024-10-15T10:00:02Z","level":"DEBUG","msg":"api response","method":"GET","url":"https://bdds.epo.org/api/products","status":200,"duration_ms":412}
+{"time":"2026-03-29T11:04:01.797+02:00","level":"INFO","msg":"executing command","command":"list-products"}
+{"time":"2026-03-29T11:04:01.798+02:00","level":"INFO","msg":"authenticating","username":"my.account@example.com"}
+{"time":"2026-03-29T11:04:02.346+02:00","level":"INFO","msg":"token obtained","expiry":"2026-03-29T12:04:02.346+02:00"}
+{"time":"2026-03-29T11:04:02.346+02:00","level":"DEBUG","msg":"api request","method":"GET","url":"https://publication-bdds.apps.epo.org/bdds/bdds-bff-service/prod/api/products/"}
+{"time":"2026-03-29T11:04:02.566+02:00","level":"DEBUG","msg":"api response","method":"GET","url":"https://publication-bdds.apps.epo.org/bdds/bdds-bff-service/prod/api/products/","status":200,"duration_ms":219}
 ```
 
 ---
 
-## Exemples composés
+## Composed examples
 
-### Trouver un produit et télécharger sa dernière livraison
+### Find a product and download its latest delivery
 
 ```bash
-# 1. Récupérer l'ID du produit
-PRODUCT_ID=$(epo-bdds-cli find-product -name "EP Citations" | jq '.id')
+# 1. Get the product ID
+PRODUCT_ID=$(epo-bdds-cli find-product -name "14.11 EPO worldwide legal event data (INPADOC) - front file" | jq '.product_id')
 
-# 2. Récupérer l'ID de la dernière livraison et du premier fichier
+# 2. Get the latest delivery ID and first file ID
 DELIVERY=$(epo-bdds-cli latest-delivery -id "$PRODUCT_ID")
-DELIVERY_ID=$(echo "$DELIVERY" | jq '.delivery_id')
-FILE_ID=$(echo "$DELIVERY"    | jq '.files[0].file_id')
-FILE_NAME=$(echo "$DELIVERY"  | jq -r '.files[0].file_name')
+DELIVERY_ID=$(echo "$DELIVERY" | jq '.deliveries[0].delivery_id')
+FILE_ID=$(echo "$DELIVERY"     | jq '.deliveries[0].files[0].file_id')
+FILE_NAME=$(echo "$DELIVERY"   | jq -r '.deliveries[0].files[0].file_name')
 
-# 3. Télécharger
+# 3. Download
 epo-bdds-cli download-file \
   -product "$PRODUCT_ID" \
   -delivery "$DELIVERY_ID" \
@@ -231,19 +280,19 @@ epo-bdds-cli download-file \
   -output "/data/$FILE_NAME"
 ```
 
-### Lister les fichiers disponibles dans la dernière livraison
+### List available files in the latest delivery
 
 ```bash
-epo-bdds-cli latest-delivery -id 1 | jq '.files[] | {file_id, file_name, file_size}'
+epo-bdds-cli latest-delivery -id 5 | jq '.deliveries[0].files[] | {file_id, file_name, file_size}'
 ```
 
-### Vérifier l'accès avant un téléchargement
+### Check access before downloading
 
 ```bash
 if epo-bdds-cli list-products > /dev/null; then
-  echo "Connexion OK"
+  echo "Connection OK"
 else
-  echo "Échec d'authentification" >&2
+  echo "Authentication failed" >&2
   exit 1
 fi
 ```
