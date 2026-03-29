@@ -33,6 +33,8 @@ epo-bdds-cli [global flags] <command> [command flags]
 | `-log-level` | `debug`, `info`, `warn`, `error` | `error` | Log verbosity level |
 | `-log-format` | `json`, `text` | `text` | Log format |
 | `-log-file` | path | stderr | Log output file |
+| `-format` | `json`, `csv` | `json` | Output format |
+| `-csv-separator` | single character | `,` | Field separator for CSV output |
 
 ---
 
@@ -209,6 +211,51 @@ Output:
 ```
 
 The download computes a SHA1 checksum on the fly (stream) and re-verifies it from disk to detect any write corruption.
+
+---
+
+## CSV output
+
+All commands support `-format csv`. Rows are written to stdout, one per file (nested deliveries and files are flattened). Use `-csv-separator` to change the field separator (default `,`). The characters `"`, `\r`, `\n`, and `\0` are rejected.
+
+### CSV schemas
+
+| Command | Headers |
+|---------|---------|
+| `list-products` | `product_id`, `name`, `description` |
+| `find-product` | `product_id`, `name`, `description` |
+| `get-product` | `product_id`, `name`, `description`, `delivery_id`, `delivery_name`, `delivery_publication_datetime`, `delivery_expiry_datetime`, `file_id`, `file_name`, `file_size`, `file_checksum`, `file_publication_datetime` |
+| `latest-delivery` | same as `get-product` |
+| `download-file` | `product_id`, `delivery_id`, `file_id`, `output`, `size_bytes`, `duration_ms`, `checksum` |
+
+### Examples
+
+```bash
+# Comma-separated (default)
+epo-bdds-cli -format csv list-products
+
+# Tab-separated
+epo-bdds-cli -format csv -csv-separator $'\t' list-products
+
+# Semicolon-separated
+epo-bdds-cli -format csv -csv-separator ';' latest-delivery -id 5
+
+# Export latest delivery to a TSV file
+epo-bdds-cli -format csv -csv-separator $'\t' latest-delivery -id 5 > latest.tsv
+```
+
+Sample output for `list-products`:
+
+```
+product_id,name,description
+5,14.11 EPO worldwide legal event data (INPADOC) - front file,The product 14.11 contains legal event data...
+3,14.7  EPO worldwide bibliographic data (DOCDB) - front file,DOCDB - EPO worldwide bibliographic data...
+```
+
+> **Note**: `"` is not a valid separator (it is the CSV quoting character). Using it produces an error:
+> ```
+> error: -csv-separator '"' is not a valid field separator
+> ```
 
 ---
 

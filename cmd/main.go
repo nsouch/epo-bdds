@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha1"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,6 +117,8 @@ Global flags:
   -log-level string    Log level: debug, info, warn, error (default "error")
   -log-format string   Log format: json, text (default "text")
   -log-file string     Log file path (default: stderr)
+  -format string       Output format: json, csv (default "json")
+  -csv-separator string  Field separator for CSV output (default ",")
 
 Commands:
   list-products
@@ -166,6 +170,8 @@ func runWithFactory(args []string, stdout, stderr io.Writer, makeClient clientFa
 	logLevel := gf.String("log-level", "error", "Log level: debug, info, warn, error")
 	logFormat := gf.String("log-format", "text", "Log format: json, text")
 	logFilePath := gf.String("log-file", "", "Log file path (default: stderr)")
+	format := gf.String("format", "json", "Output format: json, csv")
+	csvSeparator := gf.String("csv-separator", ",", `Field separator for CSV output (default ",")`)
 
 	if err := gf.Parse(args); err != nil {
 		return 1
@@ -184,6 +190,22 @@ func runWithFactory(args []string, stdout, stderr io.Writer, makeClient clientFa
 		defer closer.Close()
 	}
 
+	if *format != "json" && *format != "csv" {
+		fmt.Fprintf(stderr, "error: invalid format %q: must be json or csv\n", *format)
+		return 1
+	}
+
+	sepRunes := []rune(*csvSeparator)
+	if len(sepRunes) != 1 {
+		fmt.Fprintf(stderr, "error: -csv-separator must be a single character\n")
+		return 1
+	}
+	sep := sepRunes[0]
+	if sep == '"' || sep == '\r' || sep == '\n' || sep == 0 {
+		fmt.Fprintf(stderr, "error: -csv-separator %q is not a valid field separator\n", sep)
+		return 1
+	}
+
 	command := gf.Arg(0)
 	cmdArgs := gf.Args()[1:]
 
@@ -196,15 +218,15 @@ func runWithFactory(args []string, stdout, stderr io.Writer, makeClient clientFa
 
 	switch command {
 	case "list-products":
-		return runListProducts(client, cmdArgs, stdout, stderr, logger)
+		return runListProducts(client, cmdArgs, stdout, stderr, *format, sep, logger)
 	case "get-product":
-		return runGetProduct(client, cmdArgs, stdout, stderr, logger)
+		return runGetProduct(client, cmdArgs, stdout, stderr, *format, sep, logger)
 	case "find-product":
-		return runFindProduct(client, cmdArgs, stdout, stderr, logger)
+		return runFindProduct(client, cmdArgs, stdout, stderr, *format, sep, logger)
 	case "latest-delivery":
-		return runLatestDelivery(client, cmdArgs, stdout, stderr, logger)
+		return runLatestDelivery(client, cmdArgs, stdout, stderr, *format, sep, logger)
 	case "download-file":
-		return runDownloadFile(client, cmdArgs, stdout, stderr, logger)
+		return runDownloadFile(client, cmdArgs, stdout, stderr, *format, sep, logger)
 	default:
 		fmt.Fprintf(stderr, "unknown command: %q\n\n", command)
 		fmt.Fprint(stderr, usageText)
@@ -290,7 +312,7 @@ func errorCode(err error) string {
 
 // --- Sub-command implementations ---
 
-func runListProducts(client BddsClient, args []string, stdout, stderr io.Writer, logger *slog.Logger) int {
+func runListProducts(client BddsClient, args []string, stdout, stderr io.Writer, format string, sep rune, logger *slog.Logger) int {
 	fs := flag.NewFlagSet("list-products", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	if err := fs.Parse(args); err != nil {
@@ -309,10 +331,10 @@ func runListProducts(client BddsClient, args []string, stdout, stderr io.Writer,
 		out[i] = productResponse{ID: p.ID, Name: p.Name, Description: p.Description}
 	}
 	logger.Info("list products success", "count", len(products))
-	return writeJSON(stdout, out)
+	return writeOutput(stdout, format, sep, out)
 }
 
-func runGetProduct(client BddsClient, args []string, stdout, stderr io.Writer, logger *slog.Logger) int {
+func runGetProduct(client BddsClient, args []string, stdout, stderr io.Writer, format string, sep rune, logger *slog.Logger) int {
 	fs := flag.NewFlagSet("get-product", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	id := fs.Int("id", 0, "Product ID (required)")
@@ -332,10 +354,10 @@ func runGetProduct(client BddsClient, args []string, stdout, stderr io.Writer, l
 		return writeError(stderr, errorCode(err), err.Error())
 	}
 	logger.Info("get product success", "id", *id, "deliveries", len(product.Deliveries))
-	return writeJSON(stdout, toProductWithDeliveriesResponse(product))
+	return writeOutput(stdout, format, sep, toProductWithDeliveriesResponse(product))
 }
 
-func runFindProduct(client BddsClient, args []string, stdout, stderr io.Writer, logger *slog.Logger) int {
+func runFindProduct(client BddsClient, args []string, stdout, stderr io.Writer, format string, sep rune, logger *slog.Logger) int {
 	fs := flag.NewFlagSet("find-product", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	name := fs.String("name", "", "Product name (required)")
@@ -355,14 +377,14 @@ func runFindProduct(client BddsClient, args []string, stdout, stderr io.Writer, 
 		return writeError(stderr, errorCode(err), err.Error())
 	}
 	logger.Info("find product success", "id", product.ID)
-	return writeJSON(stdout, findProductResponse{
+	return writeOutput(stdout, format, sep, findProductResponse{
 		ID:          product.ID,
 		Name:        product.Name,
 		Description: product.Description,
 	})
 }
 
-func runLatestDelivery(client BddsClient, args []string, stdout, stderr io.Writer, logger *slog.Logger) int {
+func runLatestDelivery(client BddsClient, args []string, stdout, stderr io.Writer, format string, sep rune, logger *slog.Logger) int {
 	fs := flag.NewFlagSet("latest-delivery", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	id := fs.Int("id", 0, "Product ID (required)")
@@ -394,7 +416,7 @@ func runLatestDelivery(client BddsClient, args []string, stdout, stderr io.Write
 	}
 
 	logger.Info("get latest delivery success", "delivery_id", latest.DeliveryID)
-	return writeJSON(stdout, productWithDeliveriesResponse{
+	return writeOutput(stdout, format, sep, productWithDeliveriesResponse{
 		ID:          product.ID,
 		Name:        product.Name,
 		Description: product.Description,
@@ -402,7 +424,7 @@ func runLatestDelivery(client BddsClient, args []string, stdout, stderr io.Write
 	})
 }
 
-func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer, logger *slog.Logger) int {
+func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer, format string, sep rune, logger *slog.Logger) int {
 	fs := flag.NewFlagSet("download-file", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	productID := fs.Int("product", 0, "Product ID (required)")
@@ -526,7 +548,7 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		"duration_ms", duration.Milliseconds(),
 		"checksum", computedChecksum,
 	)
-	return writeJSON(stdout, downloadResponse{
+	return writeOutput(stdout, format, sep, downloadResponse{
 		ProductID:  *productID,
 		DeliveryID: *deliveryID,
 		FileID:     *fileID,
@@ -535,4 +557,71 @@ func runDownloadFile(client BddsClient, args []string, stdout, stderr io.Writer,
 		DurationMs: duration.Milliseconds(),
 		Checksum:   computedChecksum,
 	})
+}
+
+// writeOutput writes v to w in the specified format ("json" or "csv").
+func writeOutput(w io.Writer, format string, sep rune, v any) int {
+	if format == "csv" {
+		return writeCSV(w, sep, v)
+	}
+	return writeJSON(w, v)
+}
+
+// writeCSV serialises v as CSV to w.
+// Nested structures (deliveries + files) are flattened to one row per file.
+// A delivery with no files produces one row with empty file fields.
+func writeCSV(w io.Writer, sep rune, v any) int {
+	cw := csv.NewWriter(w)
+	cw.Comma = sep
+	switch val := v.(type) {
+	case []productResponse:
+		_ = cw.Write([]string{"product_id", "name", "description"})
+		for _, p := range val {
+			_ = cw.Write([]string{strconv.Itoa(p.ID), p.Name, p.Description})
+		}
+	case productWithDeliveriesResponse:
+		_ = cw.Write([]string{
+			"product_id", "name", "description",
+			"delivery_id", "delivery_name", "delivery_publication_datetime", "delivery_expiry_datetime",
+			"file_id", "file_name", "file_size", "file_checksum", "file_publication_datetime",
+		})
+		for _, d := range val.Deliveries {
+			expiry := ""
+			if d.DeliveryExpiryDatetime != nil {
+				expiry = d.DeliveryExpiryDatetime.Format(time.RFC3339)
+			}
+			if len(d.Files) == 0 {
+				_ = cw.Write([]string{
+					strconv.Itoa(val.ID), val.Name, val.Description,
+					strconv.Itoa(d.DeliveryID), d.DeliveryName, d.DeliveryPublicationDatetime.Format(time.RFC3339), expiry,
+					"", "", "", "", "",
+				})
+				continue
+			}
+			for _, f := range d.Files {
+				_ = cw.Write([]string{
+					strconv.Itoa(val.ID), val.Name, val.Description,
+					strconv.Itoa(d.DeliveryID), d.DeliveryName, d.DeliveryPublicationDatetime.Format(time.RFC3339), expiry,
+					strconv.Itoa(f.FileID), f.FileName, f.FileSize, f.FileChecksum, f.FilePublicationDatetime.Format(time.RFC3339),
+				})
+			}
+		}
+	case findProductResponse:
+		_ = cw.Write([]string{"product_id", "name", "description"})
+		_ = cw.Write([]string{strconv.Itoa(val.ID), val.Name, val.Description})
+	case downloadResponse:
+		_ = cw.Write([]string{"product_id", "delivery_id", "file_id", "output", "size_bytes", "duration_ms", "checksum"})
+		_ = cw.Write([]string{
+			strconv.Itoa(val.ProductID), strconv.Itoa(val.DeliveryID), strconv.Itoa(val.FileID),
+			val.Output, strconv.FormatInt(val.SizeBytes, 10), strconv.FormatInt(val.DurationMs, 10), val.Checksum,
+		})
+	default:
+		_, _ = fmt.Fprintln(w, "csv: unsupported response type")
+		return 1
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		return 1
+	}
+	return 0
 }

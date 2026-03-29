@@ -254,7 +254,7 @@ func TestRunListProducts_Success(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runListProducts(mock, nil, &stdout, &stderr, noopLogger())
+	code := runListProducts(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -277,7 +277,7 @@ func TestRunListProducts_Empty(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runListProducts(mock, nil, &stdout, &stderr, noopLogger())
+	code := runListProducts(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d", code)
 	}
@@ -297,7 +297,7 @@ func TestRunListProducts_Error(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runListProducts(mock, nil, &stdout, &stderr, noopLogger())
+	code := runListProducts(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -317,7 +317,7 @@ func TestRunListProducts_AuthError(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runListProducts(mock, nil, &stdout, &stderr, noopLogger())
+	code := runListProducts(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -337,7 +337,7 @@ func TestRunListProducts_RateLimitError(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runListProducts(mock, nil, &stdout, &stderr, noopLogger())
+	code := runListProducts(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -380,7 +380,7 @@ func TestRunGetProduct_Success(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runGetProduct(mock, []string{"-id", "3"}, &stdout, &stderr, noopLogger())
+	code := runGetProduct(mock, []string{"-id", "3"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -408,7 +408,7 @@ func TestRunGetProduct_Success(t *testing.T) {
 func TestRunGetProduct_MissingFlag(t *testing.T) {
 	mock := &mockClient{}
 	var stdout, stderr bytes.Buffer
-	code := runGetProduct(mock, nil, &stdout, &stderr, noopLogger())
+	code := runGetProduct(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -421,7 +421,7 @@ func TestRunGetProduct_NotFound(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runGetProduct(mock, []string{"-id", "999"}, &stdout, &stderr, noopLogger())
+	code := runGetProduct(mock, []string{"-id", "999"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -443,7 +443,7 @@ func TestRunFindProduct_Success(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runFindProduct(mock, []string{"-name", "My Product"}, &stdout, &stderr, noopLogger())
+	code := runFindProduct(mock, []string{"-name", "My Product"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -462,7 +462,7 @@ func TestRunFindProduct_Success(t *testing.T) {
 func TestRunFindProduct_MissingFlag(t *testing.T) {
 	mock := &mockClient{}
 	var stdout, stderr bytes.Buffer
-	code := runFindProduct(mock, nil, &stdout, &stderr, noopLogger())
+	code := runFindProduct(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -475,7 +475,7 @@ func TestRunFindProduct_NotFound(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runFindProduct(mock, []string{"-name", "missing"}, &stdout, &stderr, noopLogger())
+	code := runFindProduct(mock, []string{"-name", "missing"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -511,7 +511,7 @@ func TestRunLatestDelivery_Success(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runLatestDelivery(mock, []string{"-id", "3"}, &stdout, &stderr, noopLogger())
+	code := runLatestDelivery(mock, []string{"-id", "3"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -533,7 +533,7 @@ func TestRunLatestDelivery_Success(t *testing.T) {
 func TestRunLatestDelivery_MissingFlag(t *testing.T) {
 	mock := &mockClient{}
 	var stdout, stderr bytes.Buffer
-	code := runLatestDelivery(mock, nil, &stdout, &stderr, noopLogger())
+	code := runLatestDelivery(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -546,7 +546,7 @@ func TestRunLatestDelivery_Error(t *testing.T) {
 		},
 	}
 	var stdout, stderr bytes.Buffer
-	code := runLatestDelivery(mock, []string{"-id", "3"}, &stdout, &stderr, noopLogger())
+	code := runLatestDelivery(mock, []string{"-id", "3"}, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -577,7 +577,7 @@ func TestRunDownloadFile_Success(t *testing.T) {
 	outputPath := filepath.Join(dir, "download.bin")
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "3", "-delivery", "12345", "-file", "67890", "-output", outputPath}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -630,7 +630,7 @@ func TestRunDownloadFile_Checksum(t *testing.T) {
 	outputPath := filepath.Join(dir, "file.bin")
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "1", "-delivery", "2", "-file", "3", "-output", outputPath}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -664,7 +664,7 @@ func TestRunDownloadFile_ChecksumVerifyMatch(t *testing.T) {
 	outputPath := filepath.Join(dir, "file.bin")
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "1", "-delivery", "2", "-file", "3", "-output", outputPath, "-checksum", expectedChecksum}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -693,7 +693,7 @@ func TestRunDownloadFile_ChecksumVerifyMismatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	wrongChecksum := "0000000000000000000000000000000000000000"
 	args := []string{"-product", "1", "-delivery", "2", "-file", "3", "-output", outputPath, "-checksum", wrongChecksum}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Fatalf("expected exit code 1 on checksum mismatch, got %d", code)
 	}
@@ -740,7 +740,7 @@ func TestRunDownloadFile_DiskCorruption(t *testing.T) {
 
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "1", "-delivery", "2", "-file", "3", "-output", outputPath}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d (stderr: %s)", code, stderr.String())
 	}
@@ -766,7 +766,7 @@ func TestRunDownloadFile_DiskCorruption(t *testing.T) {
 func TestRunDownloadFile_MissingProductFlag(t *testing.T) {
 	mock := &mockClient{}
 	var stdout, stderr bytes.Buffer
-	code := runDownloadFile(mock, nil, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, nil, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -776,7 +776,7 @@ func TestRunDownloadFile_MissingOutputFlag(t *testing.T) {
 	mock := &mockClient{}
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "3", "-delivery", "12345", "-file", "67890"}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -792,7 +792,7 @@ func TestRunDownloadFile_NotFound(t *testing.T) {
 	outputPath := filepath.Join(dir, "out.bin")
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "3", "-delivery", "12345", "-file", "67890", "-output", outputPath}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
@@ -819,7 +819,7 @@ func TestRunDownloadFile_AuthError(t *testing.T) {
 	outputPath := filepath.Join(dir, "out.bin")
 	var stdout, stderr bytes.Buffer
 	args := []string{"-product", "3", "-delivery", "12345", "-file", "67890", "-output", outputPath}
-	code := runDownloadFile(mock, args, &stdout, &stderr, noopLogger())
+	code := runDownloadFile(mock, args, &stdout, &stderr, "json", ',', noopLogger())
 	if code != 1 {
 		t.Errorf("expected exit code 1, got %d", code)
 	}
