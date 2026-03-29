@@ -5,17 +5,6 @@ import (
 	"io"
 )
 
-// obfuscateUsername keeps the first 2 and last 2 characters of s,
-// replacing the middle with X's. Short strings are fully masked.
-func obfuscateUsername(s string) string {
-	r := []rune(s)
-	n := len(r)
-	if n <= 4 {
-		return "XXXX"
-	}
-	return string(r[:2]) + "XXXX" + string(r[n-2:])
-}
-
 // readJSON reads and unmarshals JSON from a reader
 func readJSON(r io.Reader, v interface{}) error {
 	return json.NewDecoder(r).Decode(v)

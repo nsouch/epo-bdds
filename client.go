@@ -184,7 +184,7 @@ func (c *Client) authenticate(ctx context.Context) error {
 		oauthURL = "https://login.epo.org/oauth2/aus3up3nz0N133c0V417/v1/token"
 		clientID = "MG9hM3VwZG43YW41cE1JOE80MTc="
 	)
-	c.logger.Info("authenticating", "username", obfuscateUsername(c.config.Username))
+	c.logger.Info("authenticating")
 
 	data := url.Values{
 		"grant_type": {"password"},
