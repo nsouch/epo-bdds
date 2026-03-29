@@ -214,7 +214,7 @@ func runWithFactory(args []string, stdout, stderr io.Writer, makeClient clientFa
 		return writeError(stderr, "error", err.Error())
 	}
 
-	logger.Info("executing command", "command", command)
+	logger.Info("executing command", "command", command, "args", cmdArgs, "full_command", strings.Join(args, " "))
 
 	switch command {
 	case "list-products":
