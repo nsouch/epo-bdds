@@ -49,11 +49,16 @@ mkdir -p "$OUT_DIR"
 run_cmd() {
   local label="$1"
   local out_file="$OUT_DIR/$2"
+  local log_file="${out_file%.json}.log"
   shift 2
   echo "==> $label"
   echo "    cmd: epo-bdds-cli $*"
-  if ./epo-bdds-cli "$@" > "$out_file" 2>"$OUT_DIR/stderr_tmp"; then
-    echo "    OK -> $out_file"
+  if ./epo-bdds-cli \
+      -log-level debug \
+      -log-format text \
+      -log-file "$log_file" \
+      "$@" > "$out_file" 2>"$OUT_DIR/stderr_tmp"; then
+    echo "    OK -> $out_file (logs: $log_file)"
   else
     echo "    ERROR (exit code $?):"
     cat "$OUT_DIR/stderr_tmp" >&2
@@ -82,21 +87,12 @@ run_cmd "find-product (name=\"$PRODUCT_NAME\")" "find_product.json" \
 run_cmd "latest-delivery (product=$PRODUCT_ID)" "latest_delivery.json" \
   latest-delivery -id "$PRODUCT_ID"
 
-# --- logs (debug level, text format) ---
-echo "==> logs (debug, text)"
-./epo-bdds-cli \
-  -log-level debug \
-  -log-format text \
-  -log-file "$OUT_DIR/stderr_tmp" \
-  latest-delivery -id "$PRODUCT_ID" > /dev/null
-head -20 "$OUT_DIR/stderr_tmp" > "$OUT_DIR/logs_sample.txt"
-echo "    OK -> $OUT_DIR/logs_sample.txt"
-
 # --- download-file (premier fichier de la dernière livraison) ---
 DELIVERY_ID=$(jq '.deliveries[0].delivery_id' "$OUT_DIR/latest_delivery.json")
 FILE_ID=$(jq '.deliveries[0].files[0].file_id' "$OUT_DIR/latest_delivery.json")
 FILE_NAME=$(jq -r '.deliveries[0].files[0].file_name' "$OUT_DIR/latest_delivery.json")
-echo "    Latest delivery: delivery_id=$DELIVERY_ID file_id=$FILE_ID name=\"$FILE_NAME\""
+FILE_CHECKSUM=$(jq -r '.deliveries[0].files[0].file_checksum' "$OUT_DIR/latest_delivery.json")
+echo "    Latest delivery: delivery_id=$DELIVERY_ID file_id=$FILE_ID name=\"$FILE_NAME\" checksum=$FILE_CHECKSUM"
 
 DOWNLOAD_OUTPUT="$OUT_DIR/$FILE_NAME"
 run_cmd "download-file (product=$PRODUCT_ID delivery=$DELIVERY_ID file=$FILE_ID)" "download_file.json" \
@@ -104,5 +100,6 @@ run_cmd "download-file (product=$PRODUCT_ID delivery=$DELIVERY_ID file=$FILE_ID)
     -product "$PRODUCT_ID" \
     -delivery "$DELIVERY_ID" \
     -file "$FILE_ID" \
-    -output "$DOWNLOAD_OUTPUT"
+    -output "$DOWNLOAD_OUTPUT" \
+    -checksum "$FILE_CHECKSUM"
 echo "    Downloaded file saved to $DOWNLOAD_OUTPUT"
