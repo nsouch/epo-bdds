@@ -3,6 +3,7 @@
 package bdds
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -217,6 +218,48 @@ func TestIntegration_GetLatestDelivery(t *testing.T) {
 	t.Logf("  Name: %s", delivery.DeliveryName)
 	t.Logf("  Published: %s", delivery.DeliveryPublicationDatetime.Format(time.RFC3339))
 	t.Logf("  Files: %d", len(delivery.Files))
+}
+
+// TestIntegration_DownloadFile tests downloading a file with real API
+func TestIntegration_DownloadFile(t *testing.T) {
+	username := os.Getenv("EPO_BDDS_USERNAME")
+	password := os.Getenv("EPO_BDDS_PASSWORD")
+
+	if username == "" || password == "" {
+		t.Skip("EPO_BDDS_USERNAME and EPO_BDDS_PASSWORD required")
+	}
+
+	config := &Config{
+		Username: username,
+		Password: password,
+	}
+
+	client, err := NewClient(config)
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	productID := 14
+	deliveryID := 3071
+	fileID := 9014
+
+	// Download file
+	var buf bytes.Buffer
+	err = client.DownloadFile(ctx, productID, deliveryID, fileID, &buf)
+	if err != nil {
+		t.Fatalf("DownloadFile failed: %v", err)
+	}
+
+	if buf.Len() == 0 {
+		t.Error("Expected downloaded file data to be non-empty")
+	}
+
+	t.Logf("✓ File downloaded successfully")
+	t.Logf("  Product ID: %d, Delivery ID: %d, File ID: %d", productID, deliveryID, fileID)
+	t.Logf("  Downloaded %d bytes", buf.Len())
 }
 
 // Note: File download test is intentionally skipped by default to avoid
