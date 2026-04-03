@@ -80,7 +80,7 @@ func DefaultConfig() *Config {
 		UserAgent:  "PatentDev/BDDS/1.0",
 		MaxRetries: 3,
 		RetryDelay: 1,
-		Timeout:    30,
+		Timeout:    300,
 	}
 }
 
